@@ -17,9 +17,9 @@ struct PostgresPrivatePodcastIntegrationTests {
     let run = Task { await pool.run() }
     defer { run.cancel() }
     var root = URL(fileURLWithPath: #filePath)
-    for _ in 0..<6 { root.deleteLastPathComponent() }
+    for _ in 0..<3 { root.deleteLastPathComponent() }
     for name in ["20261005010000_podcast_listener.sql", "20261006010000_private_podcast_subscriptions.sql"] {
-      let migration = try String(contentsOf: root.appendingPathComponent("database/migrations/" + name), encoding: .utf8)
+      let migration = try String(contentsOf: root.appendingPathComponent("TestSupport/Migrations/" + name), encoding: .utf8)
       let statements = migration.components(separatedBy: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("--") }.joined(separator: "\n").components(separatedBy: ";")
       for statement in statements where !statement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         _ = try await pool.query(PostgresQuery(unsafeSQL: statement), logger: logger)

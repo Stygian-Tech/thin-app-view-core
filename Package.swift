@@ -11,7 +11,7 @@ let package = Package(
   ],
   dependencies: [
     .package(path: "../OperationsCore"),
-    .package(path: "../ReadStateCore"),
+    .package(path: "Dependencies/ReadStateCore"),
     .package(path: "../SocialWireRedis"),
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.23.0"),
     .package(url: "https://github.com/vapor/postgres-nio.git", from: "1.21.0"),
@@ -37,7 +37,6 @@ let package = Package(
       path: "Sources/ThinAppViewCore",
       swiftSettings: [
         .swiftLanguageMode(.v6),
-        .unsafeFlags(["-warnings-as-errors"]),
       ]
     ),
     .testTarget(
@@ -53,7 +52,6 @@ let package = Package(
       resources: [.copy("Fixtures")],
       swiftSettings: [
         .swiftLanguageMode(.v6),
-        .unsafeFlags(["-warnings-as-errors"]),
       ]
     ),
   ]

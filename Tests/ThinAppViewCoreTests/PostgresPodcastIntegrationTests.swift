@@ -22,10 +22,10 @@ struct PostgresPodcastIntegrationTests {
         throw PodcastStoreError.invalidRequest
       }
       var root = URL(fileURLWithPath: #filePath)
-      for _ in 0..<6 { root.deleteLastPathComponent() }
+      for _ in 0..<3 { root.deleteLastPathComponent() }
       let migration = try String(
         contentsOf: root.appendingPathComponent(
-          "database/migrations/20261005010000_podcast_listener.sql"), encoding: .utf8)
+          "TestSupport/Migrations/20261005010000_podcast_listener.sql"), encoding: .utf8)
       let statements = migration.components(separatedBy: "\n").filter {
         !$0.trimmingCharacters(in: .whitespaces).hasPrefix("--")
       }.joined(separator: "\n").components(separatedBy: ";")
