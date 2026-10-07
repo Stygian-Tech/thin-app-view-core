@@ -170,5 +170,10 @@
     "Tests/ThinAppViewCoreTests/ThinAppViewTests.swift": "703db2cdbe56f3acbbe7f253e5c233f1581a1e8c819f044a7a604b90f9079a36",
     "Tests/ThinAppViewCoreTests/UnreadMutationQueryTests.swift": "6558323bdeac6daa1874ddb90b54ada9be295ee11510e92deb53aec88a7a5dca",
     "Tests/ThinAppViewCoreTests/UnreadReadMutationScopeTests.swift": "aeadb7c784af331e2491fc96fe587e6b5e2646d103be8702228bb4b97e1ee26b"
+  },
+  "modifiedPaths": {
+    "Tests/ThinAppViewCoreTests/PostgresJetstreamInboxIntegrationTests.swift": "Only repository-root traversal and migration fixture location changed for standalone test schema.",
+    "Tests/ThinAppViewCoreTests/PostgresPodcastIntegrationTests.swift": "Only repository-root traversal and migration fixture location changed for standalone test schema.",
+    "Tests/ThinAppViewCoreTests/PostgresPrivatePodcastIntegrationTests.swift": "Only repository-root traversal and migration fixture location changed for standalone test schema."
   }
 }
