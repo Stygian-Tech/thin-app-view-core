@@ -10,9 +10,9 @@ let package = Package(
     .library(name: "ThinAppViewCore", targets: ["ThinAppViewCore"]),
   ],
   dependencies: [
-    .package(path: "../OperationsCore"),
+    .package(url: "https://github.com/Stygian-Tech/operations-core.git", revision: "a3b7bb328189a423f3e2d2fdd1dcfd4022faddc1"),
     .package(path: "Dependencies/ReadStateCore"),
-    .package(path: "../SocialWireRedis"),
+    .package(url: "https://github.com/Stygian-Tech/social-wire-redis.git", revision: "313305b98919ac8075313044b6d867c13650a329"),
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.23.0"),
     .package(url: "https://github.com/vapor/postgres-nio.git", from: "1.21.0"),
     .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.10.0"),
@@ -24,9 +24,9 @@ let package = Package(
     .target(
       name: "ThinAppViewCore",
       dependencies: [
-        "OperationsCore",
+        .product(name: "OperationsCore", package: "operations-core"),
         "ReadStateCore",
-        "SocialWireRedis",
+        .product(name: "SocialWireRedis", package: "social-wire-redis"),
         .product(name: "AsyncHTTPClient", package: "async-http-client"),
         .product(name: "PostgresNIO", package: "postgres-nio"),
         .product(name: "GRDB", package: "GRDB.swift"),
@@ -43,8 +43,8 @@ let package = Package(
       name: "ThinAppViewCoreTests",
       dependencies: [
         "ThinAppViewCore",
-        "OperationsCore",
-        "SocialWireRedis",
+        .product(name: "OperationsCore", package: "operations-core"),
+        .product(name: "SocialWireRedis", package: "social-wire-redis"),
         .product(name: "GRDB", package: "GRDB.swift"),
         .product(name: "Logging", package: "swift-log"),
       ],
