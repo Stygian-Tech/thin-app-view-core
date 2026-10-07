@@ -175,5 +175,14 @@
     "Tests/ThinAppViewCoreTests/PostgresJetstreamInboxIntegrationTests.swift": "Only repository-root traversal and migration fixture location changed for standalone test schema.",
     "Tests/ThinAppViewCoreTests/PostgresPodcastIntegrationTests.swift": "Only repository-root traversal and migration fixture location changed for standalone test schema.",
     "Tests/ThinAppViewCoreTests/PostgresPrivatePodcastIntegrationTests.swift": "Only repository-root traversal and migration fixture location changed for standalone test schema."
+  },
+  "fixtureSnapshots": {
+    "read-state/fixtures/v2-foundation.json": {
+      "repository": "https://github.com/Stygian-Tech/the-social-wire",
+      "revision": "47368fefb52ad90e37f6d0962a87451b04a04c56",
+      "sourcePath": "packages/read-state/fixtures/v2-foundation.json",
+      "sha256": "57e6472975c705b54c0e3a28ac573ca3f6da2a9b8ee865566d5406194613d090",
+      "purpose": "Unchanged shared read-state foundation fixture consumed by vendored ReadStateV2FoundationTests from its canonical standalone root path."
+    }
   }
 }
