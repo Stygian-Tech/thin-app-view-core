@@ -11,7 +11,6 @@ let package = Package(
   ],
   dependencies: [
     .package(url: "https://github.com/Stygian-Tech/operations-core.git", revision: "a3b7bb328189a423f3e2d2fdd1dcfd4022faddc1"),
-    .package(path: "Dependencies/ReadStateCore"),
     .package(url: "https://github.com/Stygian-Tech/social-wire-redis.git", revision: "313305b98919ac8075313044b6d867c13650a329"),
     .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.23.0"),
     .package(url: "https://github.com/vapor/postgres-nio.git", from: "1.21.0"),
@@ -21,6 +20,18 @@ let package = Package(
     .package(url: "https://github.com/apple/swift-nio-ssl.git", from: "2.25.0"),
   ],
   targets: [
+    .target(
+      name: "ReadStateCore",
+      dependencies: [.product(name: "Crypto", package: "swift-crypto")],
+      path: "Dependencies/ReadStateCore/Sources/ReadStateCore",
+      swiftSettings: [.swiftLanguageMode(.v6)]
+    ),
+    .testTarget(
+      name: "ReadStateCoreTests",
+      dependencies: ["ReadStateCore"],
+      path: "Dependencies/ReadStateCore/Tests/ReadStateCoreTests",
+      swiftSettings: [.swiftLanguageMode(.v6)]
+    ),
     .target(
       name: "ThinAppViewCore",
       dependencies: [

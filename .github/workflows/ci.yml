@@ -53,6 +53,3 @@ jobs:
           THIN_APPVIEW_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/package_test?sslmode=disable
           PODCAST_PRIVATE_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/package_test?sslmode=disable
         run: swift test -Xswiftc -warnings-as-errors
-      - name: Test ReadStateCore dependency snapshot
-        working-directory: Dependencies/ReadStateCore
-        run: swift test -Xswiftc -warnings-as-errors
