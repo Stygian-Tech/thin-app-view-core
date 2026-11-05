@@ -8,6 +8,7 @@ let package = Package(
   ],
   products: [
     .library(name: "ThinAppViewCore", targets: ["ThinAppViewCore"]),
+    .library(name: "ReadStateCore", targets: ["ReadStateCore"]),
   ],
   dependencies: [
     .package(url: "https://github.com/Stygian-Tech/operations-core.git", revision: "a3b7bb328189a423f3e2d2fdd1dcfd4022faddc1"),
