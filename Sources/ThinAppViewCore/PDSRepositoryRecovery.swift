@@ -14,6 +14,10 @@ public struct PDSRepositoryRecoveryContext: Sendable {
 }
 
 struct PDSRepositoryRecoveryState: Codable, Sendable {
+  var snapshotMode: String?
+  var commitCid: String?
+  var revision: String?
+  var recordOffset: Int?
   var snapshotId = UUID().uuidString
   var pruningComplete = false
   var pruneCreatedAt: Date?
@@ -45,10 +49,11 @@ protocol PDSRepositoryRecoveryStore: Sendable {
   func yieldRepositoryRecovery(_ context: PDSRepositoryRecoveryContext) async throws
 }
 
-enum PDSRepositoryRecoveryError: Error {
+enum PDSRepositoryRecoveryError: Error, Equatable {
   case yielded
   case pageLimitExceeded
   case unavailable
+  case signedSnapshotUnavailable
 }
 
 actor PDSRepositoryRecovery {
