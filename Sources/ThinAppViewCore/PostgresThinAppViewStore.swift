@@ -870,7 +870,7 @@ public init(pool: PostgresClient, logger: Logger) {
   }
 
   public func deleteReadMark(viewerDid: String, subjectUri: String) async throws {
-    try await legacyReadStateTransaction(viewerDid: viewerDid) { connection in
+    _ = try await legacyReadStateTransaction(viewerDid: viewerDid) { connection in
       try await connection.query(
         """
         DELETE FROM read_marks
