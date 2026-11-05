@@ -193,6 +193,20 @@ public struct ThinAppViewEnrollBackfill: Sendable {
   private let config: ThinAppViewConfig
   private let logger: Logger
 
+  func applyVerifiedSnapshotRecord(_ record: RepositorySnapshotRecord, did: String, pdsBase: String)
+    async throws
+  {
+    guard let parsed = RenderFieldExtractor.parseAtUri(record.uri), parsed.did == did,
+      ["site.standard.document", "site.standard.entry"].contains(parsed.collection)
+    else {
+      throw RepositorySnapshotError.invalid("snapshot record scope mismatch")
+    }
+    try await indexer.handleCommit(
+      repoDid: did, collection: parsed.collection, rkey: parsed.rkey,
+      cid: record.cid, recordJSON: record.value, operation: "create", pdsBase: pdsBase,
+      ingestionSource: "pds_reconciliation")
+  }
+
   public init(
     store: any ThinAppViewStore,
     indexer: ThinAppViewIndexer,
@@ -261,7 +275,8 @@ public struct ThinAppViewEnrollBackfill: Sendable {
     shouldContinue: @Sendable @escaping () async -> Bool = { true },
     onProgress: @Sendable @escaping (PDSReconciliationProgress) async -> Void = { _ in }
   ) async throws -> PDSReconciliationReport {
-    try await reconcile(authorDids: authorDids, collections: collections, options: options,
+    try await reconcile(
+      authorDids: authorDids, collections: collections, options: options,
       shouldContinue: shouldContinue, onProgress: onProgress, recovery: nil)
   }
 
@@ -437,12 +452,14 @@ public struct ThinAppViewEnrollBackfill: Sendable {
 
     let pds: String
     do {
-      guard let resolved = try await ThinAppViewPdsResolution.resolvePdsBase(
-        repoDid: authorDid,
-        plcBase: plcURL,
-        transport: transport,
-        endpointPolicy: endpointPolicy
-      ) else {
+      guard
+        let resolved = try await ThinAppViewPdsResolution.resolvePdsBase(
+          repoDid: authorDid,
+          plcBase: plcURL,
+          transport: transport,
+          endpointPolicy: endpointPolicy
+        )
+      else {
         return PDSAuthorReconciliationResult(
           authorDid: authorDid,
           pdsBase: nil,
@@ -476,8 +493,10 @@ public struct ThinAppViewEnrollBackfill: Sendable {
       }
       let previous = await recovery?.collection(collection)
       if let previous, previous.complete {
-        collectionResults.append(.init(collection: collection, observedCount: previous.observedCount,
-          indexedCount: previous.indexedCount, truncated: false, issues: []))
+        collectionResults.append(
+          .init(
+            collection: collection, observedCount: previous.observedCount,
+            indexedCount: previous.indexedCount, truncated: false, issues: []))
         continue
       }
       guard recordBudget.remaining > 0 else {
@@ -535,6 +554,7 @@ public struct ThinAppViewEnrollBackfill: Sendable {
     var truncated = false
     var rateLimitRetries: [PDSRateLimitRetryEvidence] = []
     var includeReverse = true
+    var requestedPageLimit = Self.listRecordsPageLimit(for: collection)
 
     pageLoop: repeat {
       try Task.checkCancellation()
@@ -550,9 +570,11 @@ public struct ThinAppViewEnrollBackfill: Sendable {
           collection: collection,
           cursor: cursor,
           includeReverse: includeReverse,
+          initialLimit: requestedPageLimit,
           options: options,
           transport: transport
         )
+        requestedPageLimit = result.requestedLimit
         response = result.response
         includeReverse = result.usedReverse
         rateLimitRetries.append(contentsOf: result.rateLimitRetries)
@@ -588,7 +610,7 @@ public struct ThinAppViewEnrollBackfill: Sendable {
         break
       }
 
-      if recovery != nil, records.count > Self.listRecordsPageLimit(for: collection) {
+      if recovery != nil, records.count > requestedPageLimit {
         issues.append(.init(kind: .malformedResponse, detail: "page_exceeds_requested_limit"))
         break
       }
@@ -672,7 +694,8 @@ public struct ThinAppViewEnrollBackfill: Sendable {
         checkpoint.observedCount = (previous?.observedCount ?? 0) + observedCount
         checkpoint.indexedCount = (previous?.indexedCount ?? 0) + count
         checkpoint.complete = nextCursor == nil
-        try await recovery.checkpoint(collection: collection, value: checkpoint, observedURIs: pageURIs)
+        try await recovery.checkpoint(
+          collection: collection, value: checkpoint, observedURIs: pageURIs)
         if observedCount >= recordBudget, nextCursor != nil {
           throw PDSRepositoryRecoveryError.yielded
         }
@@ -707,22 +730,25 @@ public struct ThinAppViewEnrollBackfill: Sendable {
     collection: String,
     cursor: String?,
     includeReverse: Bool,
+    initialLimit: Int,
     options: PDSReconciliationOptions,
     transport: any PDSHTTPTransport
   ) async throws -> PDSListRecordsPageResponse {
     var attempts = 0
     var rateLimitRetries: [PDSRateLimitRetryEvidence] = []
     var useReverse = includeReverse
+    var pageLimit = initialLimit
     while true {
       try Task.checkCancellation()
       var components = URLComponents(
         string: "\(normalizePdsBase(pdsBase))/xrpc/com.atproto.repo.listRecords"
       )
-      components?.queryItems = [
-        URLQueryItem(name: "repo", value: authorDid),
-        URLQueryItem(name: "collection", value: collection),
-        URLQueryItem(name: "limit", value: String(Self.listRecordsPageLimit(for: collection))),
-      ]
+      components?.queryItems =
+        [
+          URLQueryItem(name: "repo", value: authorDid),
+          URLQueryItem(name: "collection", value: collection),
+          URLQueryItem(name: "limit", value: String(pageLimit)),
+        ]
         + (useReverse ? [URLQueryItem(name: "reverse", value: "true")] : [])
         + (cursor.map { [URLQueryItem(name: "cursor", value: $0)] } ?? [])
       guard let url = components?.url else {
@@ -759,7 +785,7 @@ public struct ThinAppViewEnrollBackfill: Sendable {
         try await Task.sleep(for: .seconds(evidence.appliedDelaySeconds))
         continue
       }
-      if response.status == .badRequest, useReverse {
+      if response.status == .badRequest {
         let body: ByteBuffer
         do {
           body = try await response.body.collect(upTo: 16 * 1_024)
@@ -769,15 +795,27 @@ public struct ThinAppViewEnrollBackfill: Sendable {
             rateLimitRetries: rateLimitRetries
           )
         }
-        if PDSListRecordsCompatibility.requiresForwardPagination(
-          statusCode: response.status.code,
-          body: Data(buffer: body)
-        ) {
+        if useReverse,
+          PDSListRecordsCompatibility.requiresForwardPagination(
+            statusCode: response.status.code,
+            body: Data(buffer: body)
+          )
+        {
+          useReverse = false
+          continue
+        }
+        let json = try? JSONSerialization.jsonObject(with: Data(buffer: body)) as? [String: Any]
+        let invalidRequest = (json?["error"] as? String)?.lowercased() == "invalidrequest"
+        if collection == "site.standard.document", invalidRequest, pageLimit > 1 {
+          pageLimit = 1
           useReverse = false
           continue
         }
         throw PDSListRecordsError(
-          issue: .init(kind: .unexpectedStatus, detail: "http_400"),
+          issue: .init(
+            kind: .unexpectedStatus,
+            detail: collection == "site.standard.document" && invalidRequest
+              ? "http_400_document_invalid_request" : "http_400"),
           rateLimitRetries: rateLimitRetries
         )
       }
@@ -791,7 +829,8 @@ public struct ThinAppViewEnrollBackfill: Sendable {
       return PDSListRecordsPageResponse(
         response: response,
         rateLimitRetries: rateLimitRetries,
-        usedReverse: useReverse
+        usedReverse: useReverse,
+        requestedLimit: pageLimit
       )
     }
   }
@@ -815,14 +854,15 @@ private struct PDSListRecordsPageResponse {
   let response: HTTPClientResponse
   let rateLimitRetries: [PDSRateLimitRetryEvidence]
   let usedReverse: Bool
+  let requestedLimit: Int
 }
 
 enum PDSListRecordsCompatibility {
   static func requiresForwardPagination(statusCode: UInt, body: Data) -> Bool {
     guard statusCode == 400,
-          let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
-          (json["error"] as? String)?.lowercased() == "invalidrequest",
-          let message = (json["message"] as? String)?.lowercased()
+      let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+      (json["error"] as? String)?.lowercased() == "invalidrequest",
+      let message = (json["message"] as? String)?.lowercased()
     else { return false }
     return message.contains("reverse") && message.contains("not supported")
   }
@@ -913,7 +953,8 @@ enum PDSRateLimitRetryPolicy {
     _ rawValue: String?,
     now: Date
   ) -> (seconds: TimeInterval, source: PDSRateLimitDelaySource)? {
-    guard let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+    guard let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty
+    else {
       return nil
     }
 

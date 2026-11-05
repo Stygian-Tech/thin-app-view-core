@@ -1,5 +1,5 @@
 {
-  "originHash" : "426f51bcdc3bc4f83ddd266aa0c5e6f9b17747bacaa5edc60b7028a5aee6325b",
+  "originHash" : "3b8fc3937b74d4bce0ef85f35b6cba30829ccbb58dc325b6719fb36016aa6401",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -20,6 +20,14 @@
       }
     },
     {
+      "identity" : "operations-core",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Stygian-Tech/operations-core.git",
+      "state" : {
+        "revision" : "a3b7bb328189a423f3e2d2fdd1dcfd4022faddc1"
+      }
+    },
+    {
       "identity" : "postgres-nio",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vapor/postgres-nio.git",
@@ -35,6 +43,14 @@
       "state" : {
         "revision" : "8c4ce10883e405cdbde52855f97f1ec9468c889b",
         "version" : "1.6.3"
+      }
+    },
+    {
+      "identity" : "social-wire-redis",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Stygian-Tech/social-wire-redis.git",
+      "state" : {
+        "revision" : "b47429ade063d837039a0a144379200bc0487401"
       }
     },
     {
@@ -209,6 +225,14 @@
       }
     },
     {
+      "identity" : "swift-secp256k1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/21-DOT-DEV/swift-secp256k1.git",
+      "state" : {
+        "revision" : "bcd6dd8e615ce243eab7097f213c8c4b39305a2e"
+      }
+    },
+    {
       "identity" : "swift-service-context",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-service-context.git",
@@ -233,6 +257,15 @@
       "state" : {
         "revision" : "7c6ad0fc39d0763e0b699210e4124afd5041c5df",
         "version" : "1.6.4"
+      }
+    },
+    {
+      "identity" : "websocket-kit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/vapor/websocket-kit.git",
+      "state" : {
+        "revision" : "90bbbdab3ede12c803cfbe91646f291c092517a3",
+        "version" : "2.16.2"
       }
     }
   ],

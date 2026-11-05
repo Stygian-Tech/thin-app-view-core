@@ -850,7 +850,7 @@ public init(pool: PostgresClient, logger: Logger) {
   }
 
   public func upsertReadMark(viewerDid: String, subjectUri: String, createdAt: Date) async throws {
-    try await pool.withTransaction(logger: logger) { connection in
+    try await legacyReadStateTransaction(viewerDid: viewerDid) { connection in
       try await connection.query(
         """
         INSERT INTO read_marks (viewer_did, subject_uri, created_at)
@@ -870,13 +870,13 @@ public init(pool: PostgresClient, logger: Logger) {
   }
 
   public func deleteReadMark(viewerDid: String, subjectUri: String) async throws {
-    try await pool.query(
-      """
-      DELETE FROM read_marks
-      WHERE viewer_did = \(viewerDid) AND subject_uri = \(subjectUri)
-      """,
-      logger: logger
-    )
+    try await legacyReadStateTransaction(viewerDid: viewerDid) { connection in
+      try await connection.query(
+        """
+        DELETE FROM read_marks
+        WHERE viewer_did = \(viewerDid) AND subject_uri = \(subjectUri)
+        """, logger: logger)
+    }
   }
 
   public func upsertReadMarks(
@@ -888,7 +888,7 @@ public init(pool: PostgresClient, logger: Logger) {
     guard !subjects.isEmpty else { return }
     let countedAt = Date()
     let generation = AppViewUnreadCounterSupport.generation(for: countedAt)
-    try await pool.withTransaction(logger: logger) { connection in
+    try await legacyReadStateTransaction(viewerDid: viewerDid) { connection in
       try await connection.query(
         """
         INSERT INTO read_marks (viewer_did, subject_uri, created_at)
@@ -934,7 +934,7 @@ public init(pool: PostgresClient, logger: Logger) {
     subjectUri: String,
     createdAt: Date
   ) async throws {
-    try await pool.withTransaction(logger: logger) { connection in
+    try await legacyReadStateTransaction(viewerDid: viewerDid) { connection in
       try await connection.query(
         """
         DELETE FROM read_marks
@@ -2695,7 +2695,7 @@ public init(pool: PostgresClient, logger: Logger) {
       .sorted { $0.publicationId < $1.publicationId }
     guard !uniqueScopes.isEmpty else { return ([], []) }
     let generation = AppViewUnreadCounterSupport.generation(for: readAt)
-    return try await pool.withTransaction(logger: logger) { connection in
+    return try await legacyReadStateTransaction(viewerDid: viewerDid) { connection in
       var counters: [AppViewUnreadCounter] = []
       var boundaries: [ReadWatermarkBoundary] = []
       for scope in uniqueScopes {
