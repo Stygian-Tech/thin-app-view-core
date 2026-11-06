@@ -144,6 +144,69 @@ extension PostgresJetstreamInboxIntegrationTests {
     }
   }
 
+  @Test("ready PDS projections refresh without blocking reads and coalesce repeated requests")
+  func readyPDSProjectionRefreshesWithoutIngress() async throws {
+    try await PostgresInboxFixture.withFixture { fixture in
+      let store = fixture.store
+      let viewer = "did:plc:" + fixture.sourceGeneration
+      let manifest = ReadStateManifest(generation: "empty", lastSequence: 0, head: nil)
+      let projection = try ReadStateProjection(operations: [], lastSequence: 0)
+      _ = try await store.activatePDSReadState(viewerDid: viewer, manifest: manifest, manifestCid: "original",
+        projection: projection, expectedLegacyRevision: 0)
+      let ops = PostgresOperationsStore(pool: fixture.pool, environment: fixture.sourceGeneration, logger: fixture.logger)
+      let gate = PDSRebuildConcurrencyGate()
+      let updated = ReadStateManifest(generation: "updated", lastSequence: 1,
+        head: ReadStateReference(uri: "at://\(viewer)/app.thesocialwire.readStateChunk/a", cid: "chunk"))
+      let updatedProjection = try ReadStateProjection(operations: [ReadStateOperation(actionId: "one", sequence: 1,
+        state: .read, actedAt: "2026-09-08T00:00:00Z", subjectUris: ["x"])], lastSequence: 1)
+      let recovery = PDSReadStateRecoveryCoordinator(store: store, operations: ops, logger: fixture.logger,
+        rebuild: { viewer in
+          await gate.enter(viewer)
+          _ = try await store.activatePDSReadState(viewerDid: viewer, manifest: updated, manifestCid: "refreshed",
+            projection: updatedProjection, expectedLegacyRevision: nil)
+          await gate.leave()
+          return true
+        })
+      try await recovery.requireReady(viewerDid: viewer)
+      try await recovery.requireReady(viewerDid: viewer)
+      #expect(try await store.pdsReadStateStatus(viewerDid: viewer).projectionReady)
+      await gate.open()
+      await recovery.waitForCurrentRebuild(viewerDid: viewer)
+      #expect(try await store.pdsReadStateStatus(viewerDid: viewer).manifestCid == "refreshed")
+      #expect(try await store.hasReadMark(viewerDid: viewer, subjectUri: "x"))
+      try await recovery.requireReady(viewerDid: viewer)
+      await recovery.waitForCurrentRebuild(viewerDid: viewer)
+      #expect(await gate.calls[viewer] == 1)
+    }
+  }
+
+  @Test("ready PDS projection survives a refresh outage with bounded retry")
+  func readyPDSProjectionSurvivesRefreshOutage() async throws {
+    try await PostgresInboxFixture.withFixture { fixture in
+      let store = fixture.store
+      let viewer = "did:plc:" + fixture.sourceGeneration
+      let manifest = ReadStateManifest(generation: "empty", lastSequence: 0, head: nil)
+      _ = try await store.activatePDSReadState(viewerDid: viewer, manifest: manifest, manifestCid: "original",
+        projection: ReadStateProjection(operations: [], lastSequence: 0), expectedLegacyRevision: 0)
+      let ops = PostgresOperationsStore(pool: fixture.pool, environment: fixture.sourceGeneration, logger: fixture.logger)
+      let gate = PDSRebuildConcurrencyGate()
+      await gate.open()
+      let recovery = PDSReadStateRecoveryCoordinator(store: store, operations: ops, logger: fixture.logger,
+        rebuild: { viewer in
+          await gate.enter(viewer)
+          await gate.leave()
+          throw ReadStateError.incompleteGeneration
+        })
+      try await recovery.requireReady(viewerDid: viewer)
+      await recovery.waitForCurrentRebuild(viewerDid: viewer)
+      try await recovery.requireReady(viewerDid: viewer)
+      await recovery.waitForCurrentRebuild(viewerDid: viewer)
+      #expect(try await store.pdsReadStateStatus(viewerDid: viewer).projectionReady)
+      #expect(try await store.pdsReadStateStatus(viewerDid: viewer).manifestCid == "original")
+      #expect(await gate.calls[viewer] == 1)
+    }
+  }
+
   @Test("a stalled PDS rebuild times out, releases durable leases, and stays unavailable")
   func pdsRecoveryDeadlineRetainsUnavailableState() async throws {
     try await PostgresInboxFixture.withFixture { fixture in
