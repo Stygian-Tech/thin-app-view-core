@@ -25,15 +25,17 @@ actor ThinAppViewMaintenanceState {
       deadline: now.addingTimeInterval(nextRunAfter + 60))
   }
 
-  func probe(at now: Date = Date()) -> OperationsServiceProbeResult {
+  func probe(at now: Date = Date(), cacheRequired: Bool = false) -> OperationsServiceProbeResult {
     var dependencies = [
       "appview_database": "ready", "worker_role": "coordinator", "worker_mode": "maintenance",
       "ingestion_source": "disabled", "ingestion_transport": "disabled",
       "jetstream_replay": "disabled_by_worker_mode", "pds_reconciliation": "disabled_by_worker_mode",
       "maintenance_scope": "rss_and_retention", "freshness_scope": "maintenance_scheduler",
     ]
+    dependencies["maintenance_rss_cache"] = cacheRequired ? "ready" : "not_required"
     var ready = true
     var required: Set<String> = ["appview_database", "maintenance_retention"]
+    if cacheRequired { required.insert("maintenance_rss_cache") }
     for job in ThinAppViewMaintenanceJob.allCases {
       let key = "maintenance_\(job.rawValue)"
       if job == .rss, !rssEnabled { dependencies[key] = "disabled"; continue }

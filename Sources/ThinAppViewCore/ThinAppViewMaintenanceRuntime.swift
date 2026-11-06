@@ -21,10 +21,16 @@ extension ThinAppViewWorkerRuntime {
       tapStorageEnabled: false,
       pdsEviction: PDSReadStateEvictionConfiguration.fromEnvironment(ProcessInfo.processInfo.environment),
       environment: operationsConfig.environment, logger: logger, maintenanceState: state)
+    let cacheProbe = config.rssFeedPollEnabled
+      ? projectionCache.map { ThinAppViewMaintenanceCacheProbe(cache: $0) } : nil
     let heartbeat = OperationsHeartbeatJob(
       store: operationsStore, service: serviceName, environment: operationsConfig.environment,
       instanceId: operationsConfig.instanceId,
-      dependencyProbe: { try await store.ping(); return await state.probe() },
+      dependencyProbe: {
+        try await store.ping()
+        try await cacheProbe?.run()
+        return await state.probe(cacheRequired: cacheProbe != nil)
+      },
       telemetry: telemetry, logger: logger)
     try await withThrowingTaskGroup(of: Void.self) { group in
       group.addTask { await cleanup.runForever() }
