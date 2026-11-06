@@ -16,6 +16,7 @@ protocol RepositorySnapshotHTTPTransport: Sendable {
 
 struct RepositorySnapshotPublicHTTPTransport: RepositorySnapshotHTTPTransport {
   let httpClient: HTTPClient
+  var userAgent: String? = nil
 
   func get(url: URL, accept: String, maximumBytes: Int, deadline: ContinuousClock.Instant)
     async throws
@@ -39,6 +40,7 @@ struct RepositorySnapshotPublicHTTPTransport: RepositorySnapshotHTTPTransport {
         group.addTask {
           var request = HTTPClientRequest(url: url.absoluteString)
           request.headers.add(name: "Accept", value: accept)
+          if let userAgent { request.headers.add(name: "User-Agent", value: userAgent) }
           let response = try await client.execute(request, timeout: .seconds(15))
           let body = try await response.body.collect(upTo: maximumBytes)
           return RepositorySnapshotHTTPResponse(

@@ -15,7 +15,7 @@ public struct MicrocosmContentDiscovery: PublicContentDiscovering {
   static let maximumRecords = 50
 
   public init(indexer: ThinAppViewIndexer, httpClient: HTTPClient) {
-    self.init(indexer: indexer, transport: LivePDSHTTPTransport(httpClient: httpClient))
+    self.init(indexer: indexer, transport: MicrocosmPublicHTTPTransport(httpClient: httpClient))
   }
 
   init(indexer: ThinAppViewIndexer, transport: any PDSHTTPTransport,
@@ -73,6 +73,9 @@ public struct MicrocosmContentDiscovery: PublicContentDiscovering {
             else { throw PublicContentDiscoveryError.invalidResponse }
             let uri = "at://\(did)/\(collection)/\(rkey)"
             guard observed.insert(uri).inserted else { continue }
+            // This is only a download optimization. The store's atomic insert
+            // still protects a canonical row created after this lookup.
+            if try await indexer.hasKnownContent(uri: uri) { continue }
             let record: [String: Any]
             do {
               record = try await json(base: slingshot, path: "/xrpc/com.atproto.repo.getRecord",
@@ -87,10 +90,10 @@ public struct MicrocosmContentDiscovery: PublicContentDiscovering {
             do { try PublicContentRecordCID.verify(json: json, cid: cid) }
             catch { throw PublicContentDiscoveryError.invalidResponse }
             try Task.checkCancellation()
-            try await indexer.handleCommit(repoDid: did, collection: collection, rkey: rkey,
+            let outcome = try await indexer.handleCommitWithOutcome(repoDid: did, collection: collection, rkey: rkey,
               cid: cid, recordJSON: json, operation: "create",
               ingestionSource: "microcosm_on_demand")
-            indexed += 1
+            if outcome.didMutateProjection { indexed += 1 }
           }
           guard let next = response["cursor"] as? String, !next.isEmpty else { break }
           guard next.utf8.count <= 2048, cursors.insert(next).inserted else { throw PublicContentDiscoveryError.invalidResponse }

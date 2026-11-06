@@ -1431,17 +1431,16 @@ public init(path dbPath: String, logger: Logger) throws {
   }
 
   public func upsertContentItem(_ item: IndexedContentItem) async throws {
-    let renderJSON = try item.render.encodedJSON()
-    let createdAt = Self.isoString(from: item.createdAt)
-    let indexedAt = Self.isoString(from: item.indexedAt)
-    let expiresAt = Self.isoString(from: item.expiresAt)
-    try await db.write { db in
-      try db.execute(
-        sql: """
-          INSERT INTO content_items
-            (uri, cid, author_did, collection, created_at, indexed_at, publication_site, render_json, expires_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (uri) DO UPDATE SET
+    _ = try await writeContentItem(item, insertOnly: false)
+  }
+
+  public func insertContentItemIfAbsent(_ item: IndexedContentItem) async throws -> Bool {
+    try await writeContentItem(item, insertOnly: true)
+  }
+
+  private func writeContentItem(_ item: IndexedContentItem, insertOnly: Bool) async throws -> Bool {
+    let conflict = insertOnly ? "DO NOTHING" : """
+          DO UPDATE SET
             cid = excluded.cid,
             author_did = excluded.author_did,
             collection = excluded.collection,
@@ -1457,6 +1456,18 @@ public init(path dbPath: String, logger: Logger) throws {
                   (excluded.cid, excluded.author_did, excluded.collection,
                    excluded.created_at, excluded.publication_site,
                    excluded.render_json, excluded.expires_at)
+          """
+    let renderJSON = try item.render.encodedJSON()
+    let createdAt = Self.isoString(from: item.createdAt)
+    let indexedAt = Self.isoString(from: item.indexedAt)
+    let expiresAt = Self.isoString(from: item.expiresAt)
+    return try await db.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO content_items
+            (uri, cid, author_did, collection, created_at, indexed_at, publication_site, render_json, expires_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (uri) \(conflict)
           """,
         arguments: [
           item.uri,
@@ -1470,6 +1481,7 @@ public init(path dbPath: String, logger: Logger) throws {
           expiresAt,
         ]
       )
+      return db.changesCount > 0
     }
   }
 

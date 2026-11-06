@@ -245,6 +245,13 @@ public actor ThinAppViewIndexer {
       )
       return .projectionMutation
     }
+    if ingestionSource == "microcosm_on_demand" {
+      guard let inserts = store as? any PublicContentInsertStoring else { throw PublicContentDiscoveryError.unavailable }
+      guard try await inserts.insertContentItemIfAbsent(item) else { return .skipped }
+      try await store.incrementUnreadCountersForContentItem(item)
+      await invalidateFirstPageCaches(for: item.publicationSite)
+      return .projectionMutation
+    }
     let itemAlreadyIndexed = try await store.fetchContentItem(uri: uri) != nil
     try await store.upsertContentItem(item)
     if itemAlreadyIndexed {
@@ -257,6 +264,10 @@ public actor ThinAppViewIndexer {
     }
     await invalidateFirstPageCaches(for: item.publicationSite)
     return .projectionMutation
+  }
+
+  func hasKnownContent(uri: String) async throws -> Bool {
+    try await store.fetchContentIdentity(uri: uri) != nil
   }
 
   /// Applies authoritative account lifecycle evidence from Tap.
