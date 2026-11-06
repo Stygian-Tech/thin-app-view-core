@@ -12,6 +12,15 @@ struct ThinAppViewMaintenanceCacheProbeTests {
     }
   }
 
+  @Test func failOpenRebuildLeaseIsNotHealthyCacheEvidence() async {
+    let probe = ThinAppViewMaintenanceCacheProbe(acquire: { _ in
+      AppViewProjectionRefreshLease(key: "", owner: "fail-open", ttlMilliseconds: 10_000)
+    }, release: { _ in Issue.record("Synthetic leases are not acquired Redis keys") })
+    await #expect(throws: ThinAppViewMaintenanceCacheProbe.Failure.unavailable) {
+      try await probe.run()
+    }
+  }
+
   @Test func successUsesUniqueKeysAndJoinsRelease() async throws {
     let cache = LeaseFixture()
     let probe = ThinAppViewMaintenanceCacheProbe(

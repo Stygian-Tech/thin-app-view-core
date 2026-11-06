@@ -19,7 +19,11 @@ struct ThinAppViewMaintenanceCacheProbe: Sendable {
   }
 
   func run() async throws {
-    guard let lease = await acquire(UUID().uuidString.lowercased()) else { throw Failure.unavailable }
+    // Redis-backed content rebuilds deliberately return an empty-key lease on cache failure.
+    // That sentinel permits a feed fetch, but is never evidence of a live coordination cache.
+    guard let lease = await acquire(UUID().uuidString.lowercased()),
+      !lease.key.isEmpty, !lease.owner.isEmpty
+    else { throw Failure.unavailable }
     // Release is joined even if the caller was cancelled after acquisition; TTL bounds a failed release.
     await release(lease)
   }
