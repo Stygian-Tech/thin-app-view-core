@@ -13,6 +13,14 @@ import Testing
       let backlinks = await transport.backlinkCalls
       let hydrations = await transport.hydrationCalls
       #expect(backlinks == 2 && hydrations == 1)
+      let at = Date()
+      try await store.upsertContentItem(.init(uri: "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/site.standard.document/0",
+        cid: "canonical", authorDid: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", collection: "site.standard.document",
+        createdAt: at, indexedAt: at, publicationSite: scope.publicationKeys[0],
+        render: .init(title: "Canonical", publishedAt: "2026-11-05T12:00:00Z"), expiresAt: at.addingTimeInterval(86400)))
+      #expect(try await provider.discover(scope: scope) == 0)
+      #expect(await transport.hydrationCalls == 1)
+      #expect(try await store.fetchContentItem(uri: "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/site.standard.document/0")?.title == "Canonical")
       // A different scope may have no provider rows; that is not deletion proof.
       let empty = try PublicContentDiscoveryScope(authorDid: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", publicationKeys: [])
       #expect(try await provider.discover(scope: empty) == 0)
