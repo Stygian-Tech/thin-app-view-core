@@ -22,15 +22,18 @@ actor MicrocosmTestTransport: PDSHTTPTransport {
     if url.host == "constellation.microcosm.blue" {
       backlinkCalls += 1
       #expect(url.path == "/xrpc/blue.microcosm.links.getBacklinks")
-      #expect(query["did"] == author && query["limit"] == "25" && query["reverse"] == "true")
+      #expect(query["did"] == author && query["limit"] == "25" && query["reverse"] == "false")
       if mode == .unavailable { return .init(status: .serviceUnavailable) }
       if mode == .stalled { try await Task.sleep(for: .seconds(60)) }
       if query["source"] == "site.standard.entry:site" { return try response(["records": [], "cursor": NSNull()]) }
       let many = mode == .many
       let offset = query["cursor"] == nil ? 0 : 25
       let records = (0..<(many ? 25 : 1)).map { index in
-        ["did": mode == .wrongDID ? "did:plc:cccccccccccccccccccccccc" : author,
-          "collection": "site.standard.document", "rkey": String(offset + index)]
+        // Constellation's default/false order is newest first; true reverses it.
+        // Model 999 chronological records so the 50-record cap exposes old-first loss.
+        let chronologicalIndex = many && query["reverse"] != "true" ? 998 - offset - index : offset + index
+        return ["did": mode == .wrongDID ? "did:plc:cccccccccccccccccccccccc" : author,
+          "collection": "site.standard.document", "rkey": String(chronologicalIndex)]
       }
       let cursor: Any = many ? "next\(offset)" : mode == .repeatedCursor ? "repeated" : NSNull()
       return try response(["records": records, "cursor": cursor, "total": many ? 999 : 1])

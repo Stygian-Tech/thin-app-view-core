@@ -36,13 +36,18 @@ import Testing
     }
   }
 
-  @Test func capsPaginationAndRecordHydrationDespiteLargerAdvertisedTotal() async throws {
-    try await fixture(.many) { provider, transport, _ in
+  @Test func boundedRefreshStartsWithNewestRecordsInLargePublication() async throws {
+    try await fixture(.many) { provider, transport, store in
       let scope = try PublicContentDiscoveryScope(authorDid: "did:plc:aaaaaaaaaaaaaaaaaaaaaaaa", publicationKeys: ["at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/site.standard.publication/main"])
       #expect(try await provider.discover(scope: scope) == 50)
       let backlinks = await transport.backlinkCalls
       let hydrations = await transport.hydrationCalls
       #expect(backlinks == 2 && hydrations == 50)
+      let prefix = "at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/site.standard.document/"
+      #expect(try await store.fetchContentItem(uri: prefix + "998")?.title == "Article 998")
+      #expect(try await store.fetchContentItem(uri: prefix + "949")?.title == "Article 949")
+      #expect(try await store.fetchContentItem(uri: prefix + "948") == nil)
+      #expect(try await store.fetchContentItem(uri: prefix + "0") == nil)
     }
   }
 

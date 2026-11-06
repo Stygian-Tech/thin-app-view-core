@@ -3,7 +3,7 @@ import Foundation
 import NIOCore
 
 /// Bounded public backlink discovery and record hydration. No bearer/DPoP tokens
-/// are sent to providers; direct PDS enumeration remains the history authority.
+/// are sent to providers. Provider omission proves neither complete history nor deletion.
 public struct MicrocosmContentDiscovery: PublicContentDiscovering {
   private let indexer: ThinAppViewIndexer
   private let transport: any PDSHTTPTransport
@@ -57,7 +57,8 @@ public struct MicrocosmContentDiscovery: PublicContentDiscovering {
           var query = [URLQueryItem(name: "subject", value: target),
             .init(name: "source", value: collection + ":site"),
             .init(name: "did", value: scope.authorDid),
-            .init(name: "limit", value: String(Self.pageSize)), .init(name: "reverse", value: "true")]
+            // Constellation uses false for newest first; true would spend the cap on oldest records.
+            .init(name: "limit", value: String(Self.pageSize)), .init(name: "reverse", value: "false")]
           if let cursor { query.append(.init(name: "cursor", value: cursor)) }
           let response = try await json(base: constellation, path: "/xrpc/blue.microcosm.links.getBacklinks", query: query)
           guard let records = response["records"] as? [[String: Any]], records.count <= Self.pageSize,
