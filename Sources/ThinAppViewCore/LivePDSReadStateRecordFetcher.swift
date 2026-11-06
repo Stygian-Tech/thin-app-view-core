@@ -22,6 +22,8 @@ final class LivePDSReadStateRecordFetcher: Sendable {
     Task { try? await client.shutdown() }
   }
 
+  func shutdown() async { try? await httpClient.shutdown() }
+
   func fetch(viewerDid: String, collection: String, key: String, cid: String?) async throws -> PDSReadStateFetchedRecord {
     guard let base = try await ThinAppViewPdsResolution.resolvePdsBase(
       repoDid: viewerDid, plcBase: plcURL, httpClient: httpClient),

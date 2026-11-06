@@ -15,6 +15,8 @@ public actor PDSReadStateRecoveryCoordinator {
   private let deadlineSeconds: TimeInterval
   private let retrySeconds: TimeInterval
   private let refreshSeconds: TimeInterval
+  private let close: @Sendable () async -> Void
+  private var shutdownTask: Task<Void, Never>?
   private var inFlight: [String: Task<Void, Never>] = [:]
   private var retryAfter: [String: Date] = [:]
   private var refreshAfter: [String: Date] = [:]
@@ -24,13 +26,15 @@ public actor PDSReadStateRecoveryCoordinator {
     let fetcher = LivePDSReadStateRecordFetcher(plcURL: plcURL)
     let projector = PDSReadStateProjector(store: store, fetchRecord: fetcher.fetch)
     self.init(store: store, operations: operations, projectionCache: projectionCache,
-      logger: logger, rebuild: { try await projector.reconcile(viewerDid: $0) })
+      logger: logger, close: { await fetcher.shutdown() },
+      rebuild: { try await projector.reconcile(viewerDid: $0) })
   }
 
   init(store: any PDSReadStateLifecycleStoring, operations: any OperationsStore,
        projectionCache: (any AppViewProjectionCacheStore)? = nil, logger: Logger,
        deadlineSeconds: TimeInterval = 90, retrySeconds: TimeInterval = 30,
        refreshSeconds: TimeInterval = 60,
+       close: @escaping @Sendable () async -> Void = {},
        rebuild: @escaping @Sendable (String) async throws -> Bool) {
     self.store = store
     self.operations = operations
@@ -39,14 +43,17 @@ public actor PDSReadStateRecoveryCoordinator {
     self.deadlineSeconds = max(0.01, min(deadlineSeconds, 90))
     self.retrySeconds = max(0, retrySeconds)
     self.refreshSeconds = max(0, refreshSeconds)
+    self.close = close
     self.rebuild = rebuild
   }
 
   public func requireReady(viewerDid: String) async throws {
+    guard shutdownTask == nil else { throw CancellationError() }
     // The coalesced touch precedes cache access; an idle eviction cannot race
     // past this request and turn cached/streamed results into fabricated unread.
     try await store.touchPDSReadStateAccess(viewerDid: viewerDid, at: Date())
     let status = try await store.pdsReadStateStatus(viewerDid: viewerDid)
+    guard shutdownTask == nil else { throw CancellationError() }
     guard status.authority == .pds else { return }
     let now = Date()
     let refreshReady = status.projectionReady
@@ -60,6 +67,20 @@ public actor PDSReadStateRecoveryCoordinator {
     // Without global ingestion, ready viewers still need periodic authoritative
     // PDS checks. Keep their last verified projection usable during refresh/outage.
     if !status.projectionReady { throw PDSReadStateStorageError.projectionNotReady }
+  }
+
+  /// Join all PDS work before the serving database and HTTP clients shut down.
+  public func shutdown() async {
+    if let shutdownTask { await shutdownTask.value; return }
+    let tasks = Array(inFlight.values)
+    let close = self.close
+    let task = Task {
+      for task in tasks { task.cancel() }
+      for task in tasks { await task.value }
+      await close()
+    }
+    shutdownTask = task
+    await task.value
   }
 
   // Exposed internally to deterministic tests and controlled shutdown callers.
