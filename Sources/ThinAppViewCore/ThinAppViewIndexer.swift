@@ -97,7 +97,8 @@ public actor ThinAppViewIndexer {
     ingestionEnvironment: String? = nil,
     repoRev: String? = nil,
     cursor: String? = nil,
-    eventTime: Date? = nil
+    eventTime: Date? = nil,
+    contentExpectation: ContentVerificationExpectation? = nil
   ) async throws {
     _ = try await handleCommitWithOutcome(
       repoDid: repoDid,
@@ -111,7 +112,8 @@ public actor ThinAppViewIndexer {
       ingestionEnvironment: ingestionEnvironment,
       repoRev: repoRev,
       cursor: cursor,
-      eventTime: eventTime
+      eventTime: eventTime,
+      contentExpectation: contentExpectation
     )
   }
 
@@ -127,7 +129,8 @@ public actor ThinAppViewIndexer {
     ingestionEnvironment: String? = nil,
     repoRev: String? = nil,
     cursor: String? = nil,
-    eventTime: Date? = nil
+    eventTime: Date? = nil,
+    contentExpectation: ContentVerificationExpectation? = nil
   ) async throws -> ThinAppViewIndexingOutcome {
     if collection == ReadStateManifest.collection {
       guard rkey == "self" else { return .skipped }
@@ -252,8 +255,17 @@ public actor ThinAppViewIndexer {
       await invalidateFirstPageCaches(for: item.publicationSite)
       return .projectionMutation
     }
-    let itemAlreadyIndexed = try await store.fetchContentItem(uri: uri) != nil
-    try await store.upsertContentItem(item)
+    let itemAlreadyIndexed: Bool
+    if let contentExpectation {
+      try Task.checkCancellation()
+      guard let conditional = store as? any ContentVerificationMetadataStoring,
+        try await conditional.upsertContentItem(item, expectedCID: contentExpectation.cid)
+      else { throw AuthoritativeContentVerificationError.unavailable }
+      itemAlreadyIndexed = contentExpectation.cid != nil
+    } else {
+      itemAlreadyIndexed = try await store.fetchContentItem(uri: uri) != nil
+      try await store.upsertContentItem(item)
+    }
     if itemAlreadyIndexed {
       try await store.markUnreadCountersDirtyForContent(
         authorDid: repoDid,
@@ -268,6 +280,29 @@ public actor ThinAppViewIndexer {
 
   func hasKnownContent(uri: String) async throws -> Bool {
     try await store.fetchContentIdentity(uri: uri) != nil
+  }
+
+  /// A missing-record response may race a newer canonical backfill. Only remove
+  /// the version whose authoritative lookup was actually performed.
+  public func applyAuthoritativeContentDeletion(repoDid: String, collection: String, rkey: String,
+    expectedCID: String, publicationSite: String?) async throws -> Bool {
+    guard let metadata = store as? any ContentVerificationMetadataStoring else {
+      throw PublicContentDiscoveryError.unavailable
+    }
+    let uri = RenderFieldExtractor.buildEntryUri(did: repoDid, collection: collection, rkey: rkey)
+    try Task.checkCancellation()
+    guard try await metadata.deleteContentItem(uri: uri, expectedCID: expectedCID) else { return false }
+    try await store.markUnreadCountersDirtyForContent(authorDid: repoDid, publicationSite: publicationSite)
+    if let publicationSite {
+      await invalidateFirstPageCaches(for: publicationSite)
+    } else if let projectionCache {
+      // Older rows may have no publication metadata; avoid preserving a known
+      // deleted record in a previously cached first page for any viewer.
+      await bestEffortProjectionCacheMutation(operation: "verified_delete") {
+        try await projectionCache.invalidateAllProjectionCaches()
+      }
+    }
+    return true
   }
 
   /// Applies authoritative account lifecycle evidence from Tap.
