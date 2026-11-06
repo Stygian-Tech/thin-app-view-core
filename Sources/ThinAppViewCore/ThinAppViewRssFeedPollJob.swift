@@ -20,17 +20,27 @@ public struct ThinAppViewRssFeedPollJob: Sendable {
     self.logger = logger
   }
 
-  public func runForever() async {
+  public func runForever() async { await runForever(maintenanceState: nil) }
+
+  func runForever(maintenanceState: ThinAppViewMaintenanceState?) async {
     guard config.rssFeedPollEnabled else { return }
     while !Task.isCancelled {
+      // The loop processes at most 200 feeds serially, each with a bounded HTTP read.
+      await maintenanceState?.started(.rss,
+        maximumDuration: Double(max(1, min(config.rssFeedPollFeedLimit, 200))) * 60 + 60)
+      var succeeded = false
       do {
         try await pollOnce()
+        succeeded = true
       } catch {
         logger.warning(
           "RSS feed poll failed",
           metadata: ["error": .string(String(describing: error))]
         )
       }
+      if Task.isCancelled { return }
+      await maintenanceState?.completed(.rss, succeeded: succeeded,
+        nextRunAfter: config.rssFeedPollIntervalSeconds)
       try? await Task.sleep(for: .seconds(config.rssFeedPollIntervalSeconds))
     }
   }

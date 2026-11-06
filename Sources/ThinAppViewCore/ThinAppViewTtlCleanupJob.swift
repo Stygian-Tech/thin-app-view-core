@@ -12,6 +12,7 @@ actor ThinAppViewTtlCleanupJob {
   private let batchSize: Int
   private let timeBudget: Duration
   private let logger: Logger
+  private let maintenanceState: ThinAppViewMaintenanceState?
 
   init(
     store: any ThinAppViewStore,
@@ -22,7 +23,8 @@ actor ThinAppViewTtlCleanupJob {
     environment: String,
     batchSize: Int = 1_000,
     timeBudget: Duration = .seconds(30),
-    logger: Logger
+    logger: Logger,
+    maintenanceState: ThinAppViewMaintenanceState? = nil
   ) {
     self.store = store
     self.projectionCache = projectionCache
@@ -33,16 +35,23 @@ actor ThinAppViewTtlCleanupJob {
     self.batchSize = max(1, min(batchSize, 10_000))
     self.timeBudget = timeBudget
     self.logger = logger
+    self.maintenanceState = maintenanceState
   }
 
   func runForever() async {
     while !Task.isCancelled {
+      await maintenanceState?.started(.retention, maximumDuration: 120)
+      var succeeded = false
       var mayHaveBacklog = true
       do {
         mayHaveBacklog = try await runOnce()
+        succeeded = true
       } catch {
         logger.warning("TTL cleanup failed", metadata: ["error": .string("\(error)")])
       }
+      if Task.isCancelled { return }
+      await maintenanceState?.completed(.retention, succeeded: succeeded,
+        nextRunAfter: mayHaveBacklog ? 10 : 3600)
       // Drain promptly after a full batch or transient failure, while yielding to
       // ingestion between sweeps. An empty sweep can use the normal hourly cadence.
       try? await Task.sleep(for: .seconds(mayHaveBacklog ? 10 : 3600))

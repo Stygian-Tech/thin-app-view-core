@@ -17,8 +17,16 @@ public enum ThinAppViewWorkerRuntime {
     projectionCache: (any AppViewProjectionCacheStore)? = nil,
     operationsStore: (any OperationsStore)? = nil,
     operationsConfig: OperationsConfiguration? = nil,
-    tapConfiguration: TapConsumerConfiguration? = nil
+    tapConfiguration: TapConsumerConfiguration? = nil,
+    mode: ThinAppViewWorkerMode = .ingestion
   ) async throws {
+    try mode.validate(role: role)
+    if mode == .maintenance {
+      try await runMaintenance(store: store, config: config, serviceName: serviceName,
+        logger: logger, httpClient: httpClient, projectionCache: projectionCache,
+        operationsStore: operationsStore, operationsConfig: operationsConfig)
+      return
+    }
     let runtimePlan = ThinAppViewWorkerRuntimePlan(role: role)
     guard config.jetstreamMode == .v2Authoritative, role != .combined,
       tapConfiguration == nil || tapConfiguration?.mode == .disabled
@@ -623,6 +631,7 @@ public enum ThinAppViewWorkerRuntimeError: Error, Sendable, Equatable {
   case conflictingIngestionAuthorities
   case unsupportedInactiveMode
   case missingPDSResolution
+  case missingMaintenanceDependencies
 }
 
 struct ProjectionRepairHealthEvidence: Sendable {
