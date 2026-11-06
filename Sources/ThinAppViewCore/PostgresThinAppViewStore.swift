@@ -747,14 +747,18 @@ public init(pool: PostgresClient, logger: Logger) {
   }
 
   public func upsertContentItem(_ item: IndexedContentItem) async throws {
+    _ = try await writeContentItem(item, insertOnly: false)
+  }
+
+  public func insertContentItemIfAbsent(_ item: IndexedContentItem) async throws -> Bool {
+    try await writeContentItem(item, insertOnly: true)
+  }
+
+  private func writeContentItem(_ item: IndexedContentItem, insertOnly: Bool) async throws -> Bool {
     let renderJSON = try item.render.encodedJSON()
-    try await pool.query(
-      """
-      INSERT INTO content_items
-        (uri, cid, author_did, collection, created_at, indexed_at, publication_site, render_json, expires_at)
-      VALUES
-        (\(item.uri), \(item.cid), \(item.authorDid), \(item.collection), \(item.createdAt), \(item.indexedAt), \(item.publicationSite), \(renderJSON)::jsonb, \(item.expiresAt))
-      ON CONFLICT (uri) DO UPDATE SET
+    // Only these two constant conflict policies enter the SQL text.
+    let conflict = insertOnly ? "DO NOTHING" : """
+      DO UPDATE SET
         cid = EXCLUDED.cid,
         author_did = EXCLUDED.author_did,
         collection = EXCLUDED.collection,
@@ -770,9 +774,21 @@ public init(pool: PostgresClient, logger: Logger) {
               (EXCLUDED.cid, EXCLUDED.author_did, EXCLUDED.collection,
                EXCLUDED.created_at, EXCLUDED.publication_site,
                EXCLUDED.render_json, EXCLUDED.expires_at)
+      """
+    let rows = try await pool.query(
+      """
+      INSERT INTO content_items
+        (uri, cid, author_did, collection, created_at, indexed_at, publication_site, render_json, expires_at)
+      VALUES
+        (\(item.uri), \(item.cid), \(item.authorDid), \(item.collection), \(item.createdAt), \(item.indexedAt), \(item.publicationSite), \(renderJSON)::jsonb, \(item.expiresAt))
+      ON CONFLICT (uri) \(unescaped: conflict)
+      RETURNING uri
       """,
       logger: logger
     )
+    var written = false
+    for try await _ in rows { written = true }
+    return written
   }
 
   public func deleteContentItem(uri: String) async throws {

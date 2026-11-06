@@ -21,6 +21,9 @@ struct PDSReadStateProjector: Sendable {
     let record = try await fetchRecord(viewerDid, ReadStateManifest.collection, "self", nil)
     let manifest: ReadStateManifest = try record.decode(viewerDid: viewerDid,
       collection: ReadStateManifest.collection, key: "self")
+    // Periodic ready-state refresh only needs the validated head when its CID
+    // matches an already complete projection. Evicted state must still rebuild.
+    if status.projectionReady, status.manifestCid == record.cid { return true }
     let projection = try await ReadStateGenerationLoader.loadRecords(manifest: manifest, viewerDid: viewerDid) { reference in
       try ReadStateValidation.validate(reference, viewerDid: viewerDid)
       if let cached = await cache.value(for: reference) { return cached }

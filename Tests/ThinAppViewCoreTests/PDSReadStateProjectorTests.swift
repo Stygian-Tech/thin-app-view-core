@@ -60,6 +60,28 @@ struct PDSReadStateProjectorTests {
     #expect(await store.lastProjection?.operations.first?.subjectUris == ["x"])
   }
 
+  @Test func unchangedReadyManifestChecksOnlyItsVerifiedHead() async throws {
+    let store = ProjectionStore(active: true, manifestCID: Records.manifestCID)
+    let remote = Records()
+    let projector = PDSReadStateProjector(store: store, fetchRecord: {
+      try await remote.fetch(viewerDid: $0, collection: $1, key: $2, cid: $3)
+    })
+    #expect(try await projector.reconcile(viewerDid: Records.viewer))
+    #expect(await remote.requests == 1)
+    #expect(await store.activations == 0)
+  }
+
+  @Test func unchangedEvictedManifestStillRebuildsItsCompleteProjection() async throws {
+    let store = ProjectionStore(active: true, ready: false, manifestCID: Records.manifestCID)
+    let remote = Records()
+    let projector = PDSReadStateProjector(store: store, fetchRecord: {
+      try await remote.fetch(viewerDid: $0, collection: $1, key: $2, cid: $3)
+    })
+    #expect(try await projector.reconcile(viewerDid: Records.viewer))
+    #expect(await remote.requests == 3)
+    #expect(await store.activations == 1)
+  }
+
   @Test(arguments: [Records.Failure.corrupt, .wrongViewer, .missingChunk, .changedHead])
   func invalidOrIncompleteGenerationNeverActivates(failure: Records.Failure) async throws {
     let store = ProjectionStore(active: true)
@@ -88,12 +110,15 @@ struct PDSReadStateProjectorTests {
   private actor ProjectionStore: PDSReadStateStoring {
     let active: Bool
     let ready: Bool
+    let manifestCID: String?
     var activations = 0
     var lastProjection: ReadStateProjection?
-    init(active: Bool, ready: Bool = true) { self.active = active; self.ready = ready }
+    init(active: Bool, ready: Bool = true, manifestCID: String? = nil) {
+      self.active = active; self.ready = ready; self.manifestCID = manifestCID
+    }
     func pdsReadStateStatus(viewerDid: String) -> PDSReadStateStatus {
       PDSReadStateStatus(authority: active ? .pds : .appview,
-        migrationState: active ? .verified : .notStarted, legacyRevision: 0, projectionReady: ready)
+        migrationState: active ? .verified : .notStarted, legacyRevision: 0, manifestCid: manifestCID, projectionReady: ready)
     }
     func activatePDSReadState(viewerDid: String, manifest: ReadStateManifest, manifestCid: String,
       projection: ReadStateProjection, expectedLegacyRevision: Int64?) -> PDSReadStateStatus {
