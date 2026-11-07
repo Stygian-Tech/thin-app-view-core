@@ -29,7 +29,7 @@ extension PostgresPrivatePodcastIntegrationTests {
     let privateHits = try await store.search(viewer: owner, request: PodcastSearchRequest(query: "private"))
     #expect(privateHits.shows.map(\.id) == [privateShowID])
     #expect(privateHits.shows.first?.feedUrl == nil)
-    #expect(privateHits.episodes.first?.audioUrl.hasPrefix("/v1/podcasts/media?") == true)
+    #expect(privateHits.episodes.first?.audioUrl.hasPrefix("/xrpc/app.thesocialwire.podcast.getMedia?") == true)
     #expect(!String(decoding: try JSONEncoder().encode(privateHits), as: UTF8.self).contains("owner-secret"))
     let foreignScope = try await store.search(viewer: other, request: PodcastSearchRequest(query: "private", showId: privateShowID))
     #expect(foreignScope.shows.isEmpty && foreignScope.episodes.isEmpty)

@@ -35,7 +35,7 @@ public enum PodcastPrivateCatalog {
 
   /// Publisher HTML and prose can also contain signed source links; clients receive labels only.
   public static func imageURL(showID: String? = nil, episodeID: String? = nil, kind: String, index: Int = 0) -> String {
-    "/v1/podcasts/image?" + (showID.map { "showId=" + $0 } ?? "episodeId=" + (episodeID ?? "")) + "&kind=" + kind + "&index=" + String(index)
+    "/xrpc/app.thesocialwire.podcast.getImage?" + (showID.map { "showId=" + $0 } ?? "episodeId=" + (episodeID ?? "")) + "&kind=" + kind + "&index=" + String(index)
   }
   public static func visibleText(_ text: String) -> String {
     text.replacingOccurrences(of: #"https?://[^\s<>\"']+"#, with: "[Private Link]",
@@ -67,7 +67,7 @@ public enum PodcastPrivateCatalog {
     var episode = original
     episode.title = visibleText(episode.title)
     episode.description = episode.description.map(visibleText)
-    episode.audioUrl = "/v1/podcasts/media?episodeId=" + episode.id
+    episode.audioUrl = "/xrpc/app.thesocialwire.podcast.getMedia?episodeId=" + episode.id
     episode.artworkUrl = episode.artworkUrl.map { _ in imageURL(episodeID: episode.id, kind: "artwork") }
     episode.showArtworkUrl = episode.showArtworkUrl.map { _ in imageURL(episodeID: episode.id, kind: "showArtwork") }
     episode.chapterSourceUrl = nil

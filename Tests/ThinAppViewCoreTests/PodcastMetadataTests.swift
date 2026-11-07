@@ -46,7 +46,7 @@ struct PodcastMetadataTests {
     let show = PodcastShow(id: "private-podcast:show:owner", title: "Show", artworkUrl: raw, sourceKind: "private-rss", visibility: "private", hosts: [PodcastPerson(name: "Host", imageUrl: raw, url: raw)])
     let episode = PodcastEpisode(id: "private-podcast:episode:owner", showId: show.id, title: "Episode", publishedAt: "2026-10-05T00:00:00Z", audioUrl: raw, artworkUrl: raw, transcripts: [], visibility: "private", chapters: [PodcastChapter(startSeconds: 0, title: "Intro", artworkUrl: raw, url: raw)], chapterSourceUrl: raw, showArtworkUrl: raw)
     let safeShow = PodcastPrivateCatalog.visible(show), safeEpisode = PodcastPrivateCatalog.visible(episode)
-    #expect(safeShow.hosts[0].imageUrl?.hasPrefix("/v1/podcasts/image?") == true)
+    #expect(safeShow.hosts[0].imageUrl?.hasPrefix("/xrpc/app.thesocialwire.podcast.getImage?") == true)
     #expect(safeEpisode.chapters[0].artworkUrl?.contains("kind=chapter") == true)
     #expect(safeEpisode.chapterSourceUrl == nil && safeEpisode.chapters[0].url == nil)
     #expect(!String(decoding: try JSONEncoder().encode(safeShow), as: UTF8.self).contains("private-secret"))

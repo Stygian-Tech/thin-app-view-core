@@ -28,7 +28,7 @@ struct PodcastPrivateCatalogTests {
     let encoder = JSONEncoder()
     #expect(!String(decoding: try encoder.encode(visibleShow), as: UTF8.self).contains("private-secret"))
     #expect(!String(decoding: try encoder.encode(visibleEpisode), as: UTF8.self).contains("private-secret"))
-    #expect(visibleEpisode.audioUrl == "/v1/podcasts/media?episodeId=" + owner.episodes[0].id)
+    #expect(visibleEpisode.audioUrl == "/xrpc/app.thesocialwire.podcast.getMedia?episodeId=" + owner.episodes[0].id)
     #expect(visibleShow.visibility == "private")
     #expect(visibleEpisode.visibility == "private")
   }
